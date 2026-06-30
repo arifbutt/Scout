@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>god-search chat</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d1117; color: #c9d1d9; height: 100vh; display: flex; overflow: hidden; }
+
+  #sidebar { width: 260px; min-width: 260px; background: #161b22; border-right: 1px solid #21262d; display: flex; flex-direction: column; transition: margin-left .2s; }
+  #sidebar.collapsed { margin-left: -260px; }
+  #sidebar-header { padding: 12px; border-bottom: 1px solid #21262d; display: flex; gap: 8px; }
+  #sidebar-header button { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #30363d; background: #1f6feb; color: #fff; cursor: pointer; font-size: 13px; }
+  #sidebar-header button:hover { background: #388bfd; }
+  #session-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .session-item { padding: 10px 12px; border-radius: 6px; cursor: pointer; margin-bottom: 2px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+  .session-item:hover { background: #1c2128; }
+  .session-item.active { background: #1f6feb22; border: 1px solid #1f6feb55; }
+  .session-item .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-item .ts { font-size: 11px; color: #8b949e; margin-left: 8px; white-space: nowrap; }
+  .session-item .del { display: none; color: #f85149; font-size: 16px; line-height: 1; padding: 0 4px; cursor: pointer; }
+  .session-item:hover .del { display: block; }
+  .session-item .del:hover { color: #ff6b6b; }
+
+  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #topbar { padding: 8px 16px; border-bottom: 1px solid #21262d; display: flex; align-items: center; gap: 12px; font-size: 13px; color: #8b949e; }
+  #toggle-sidebar { background: none; border: none; color: #8b949e; cursor: pointer; font-size: 18px; padding: 4px; }
+  #toggle-sidebar:hover { color: #c9d1d9; }
+  #session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #c9d1d9; }
+
+  #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 85%; padding: 12px 16px; border-radius: 12px; line-height: 1.5; font-size: 14px; white-space: pre-wrap; }
+  .msg.user { background: #1f6feb; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg.assistant { background: #161b22; color: #c9d1d9; align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid #30363d; }
+  .msg.error { background: #3d1f1f; color: #f85149; align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid #f85149; }
+  .msg sup a { color: #58a6ff; text-decoration: none; font-weight: bold; }
+  .msg sup a:hover { text-decoration: underline; }
+  .msg .sources { margin-top: 10px; padding-top: 8px; border-top: 1px solid #30363d; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .msg .sources a { color: #58a6ff; font-size: 12px; text-decoration: none; }
+  .msg .sources a:hover { text-decoration: underline; }
+  .msg .cursor { display: inline-block; width: 8px; height: 16px; background: #58a6ff; animation: blink 1s step-end infinite; margin-left: 2px; vertical-align: text-bottom; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  #input-area { display: flex; gap: 8px; padding: 16px 20px; border-top: 1px solid #21262d; background: #0d1117; }
+  #input { flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #30363d; background: #161b22; color: #c9d1d9; font-size: 14px; outline: none; }
+  #input:focus { border-color: #58a6ff; }
+  #send { padding: 10px 20px; border-radius: 8px; border: none; background: #1f6feb; color: #fff; font-size: 14px; cursor: pointer; }
+  #send:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  #loading { display: none; text-align: center; padding: 10px; color: #8b949e; font-size: 13px; }
+  #loading.show { display: block; }
+  #status { text-align: center; padding: 4px; font-size: 12px; color: #8b949e; }
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <div id="sidebar-header">
+    <button id="new-session-btn">+ New Chat</button>
+  </div>
+  <div id="session-list"></div>
+</div>
+<div id="main">
+  <div id="topbar">
+    <button id="toggle-sidebar">&#x2630;</button>
+    <span id="session-title">New Chat</span>
+  </div>
+  <div id="chat"></div>
+  <div id="loading" class="show">loading...</div>
+  <div id="status"></div>
+  <div id="input-area">
+    <input id="input" type="text" placeholder="Type a question..." disabled>
+    <button id="send" disabled>Send</button>
+  </div>
+</div>
+
+<script>
+const sidebar = document.getElementById('sidebar');
+const sessionList = document.getElementById('session-list');
+const toggleBtn = document.getElementById('toggle-sidebar');
+const newBtn = document.getElementById('new-session-btn');
+const sessionTitle = document.getElementById('session-title');
+const chat = document.getElementById('chat');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+const loading = document.getElementById('loading');
+const statusEl = document.getElementById('status');
+
+let currentSessionId = null;
+let sessions = [];
+let streaming = false;
+
+toggleBtn.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+newBtn.addEventListener('click', newSession);
+sendBtn.addEventListener('click', sendMessage);
+input.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderMsg(text, sources) {
+  let cited = escapeHtml(text);
+  if (sources && sources.length) {
+    cited += '<div class="sources">' + sources.map((s, i) =>
+      '<a href="' + escapeHtml(s.url) + '" target="_blank">[' + (i+1) + '] ' + escapeHtml(s.title) + '</a>'
+    ).join('') + '</div>';
+  }
+  return cited;
+}
+
+function addMsg(role, content, sources) {
+  const el = document.createElement('div');
+  el.className = 'msg ' + role;
+  if (role === 'assistant') {
+    el.innerHTML = content;
+  } else {
+    el.textContent = content;
+  }
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+  return el;
+}
+
+function renderSessions() {
+  sessionList.innerHTML = '';
+  for (const s of sessions) {
+    const div = document.createElement('div');
+    div.className = 'session-item' + (s.id === currentSessionId ? ' active' : '');
+    const d = new Date(s.updated);
+    const ts = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    div.innerHTML = '<span class="title">' + escapeHtml(s.title) + '</span><span class="ts">' + ts + '</span><span class="del" data-id="' + s.id + '">\u00d7</span>';
+    div.querySelector('.title').addEventListener('click', () => switchSession(s.id));
+    div.querySelector('.del').addEventListener('click', e => { e.stopPropagation(); deleteSessionFn(s.id); });
+    sessionList.appendChild(div);
+  }
+}
+
+async function loadSessions() {
+  try {
+    const resp = await fetch('/api/sessions');
+    sessions = await resp.json();
+    renderSessions();
+  } catch {}
+}
+
+async function newSession() {
+  const resp = await fetch('/api/sessions', { method: 'POST' });
+  const session = await resp.json();
+  sessions.unshift(session);
+  currentSessionId = session.id;
+  renderSessions();
+  switchSession(session.id);
+}
+
+async function switchSession(id) {
+  currentSessionId = id;
+  sessionTitle.textContent = sessions.find(s => s.id === id)?.title || 'Chat';
+  chat.innerHTML = '';
+  input.disabled = false;
+  sendBtn.disabled = false;
+  input.focus();
+  renderSessions();
+  // load messages from server - we don't have a get messages endpoint yet
+  // for now, just clear and let user type
+}
+
+async function deleteSessionFn(id) {
+  await fetch('/api/sessions/' + id, { method: 'DELETE' });
+  sessions = sessions.filter(s => s.id !== id);
+  if (id === currentSessionId) {
+    if (sessions.length) {
+      switchSession(sessions[0].id);
+    } else {
+      currentSessionId = null;
+      sessionTitle.textContent = 'New Chat';
+      chat.innerHTML = '';
+    }
+  }
+  renderSessions();
+}
+
+function sendMessage() {
+  if (streaming) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  input.disabled = true;
+  sendBtn.disabled = true;
+  streaming = true;
+
+  addMsg('user', text);
+  const msgEl = document.createElement('div');
+  msgEl.className = 'msg assistant';
+  chat.appendChild(msgEl);
+  chat.scrollTop = chat.scrollHeight;
+
+  let currentSources = [];
+  let currentText = '';
+
+  const evtSource = new EventSourcePolyfill('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: text, sessionId: currentSessionId }),
+  });
+
+  evtSource.addEventListener('session', (e) => {
+    const data = JSON.parse(e.data);
+    currentSessionId = data.sessionId;
+    if (!sessions.find(s => s.id === data.sessionId)) {
+      sessions.unshift({ id: data.sessionId, title: text.slice(0, 60) + (text.length > 60 ? '...' : ''), updated: new Date().toISOString() });
+    } else {
+      const s = sessions.find(s => s.id === data.sessionId);
+      if (s.title === 'New Chat') s.title = text.slice(0, 60) + (text.length > 60 ? '...' : '');
+    }
+    sessionTitle.textContent = sessions.find(s => s.id === currentSessionId)?.title || 'Chat';
+    renderSessions();
+  });
+
+  evtSource.addEventListener('token', (e) => {
+    const data = JSON.parse(e.data);
+    currentText += escapeHtml(data.token);
+    msgEl.innerHTML = currentText + '<span class="cursor"></span>';
+    chat.scrollTop = chat.scrollHeight;
+  });
+
+  evtSource.addEventListener('sources', (e) => {
+    const data = JSON.parse(e.data);
+    // preview only, not final sources
+  });
+
+  evtSource.addEventListener('status', (e) => {
+    const data = JSON.parse(e.data);
+    const p = data.phase;
+    if (p === 'search') statusEl.textContent = 'searching...';
+    else if (p.startsWith('reading')) statusEl.textContent = p;
+    else if (p === 'generating') statusEl.textContent = 'generating...';
+    else statusEl.textContent = '';
+  });
+
+  evtSource.addEventListener('done', (e) => {
+    const data = JSON.parse(e.data);
+    currentText = '';
+    if (data.sources) currentSources = data.sources;
+    msgEl.innerHTML = renderMsg(data.text, currentSources);
+    if (data.sessionId) {
+      currentSessionId = data.sessionId;
+      loadSessions();
+    }
+    evtSource.close();
+    input.disabled = false;
+    sendBtn.disabled = false;
+    streaming = false;
+    statusEl.textContent = '';
+    input.focus();
+  });
+
+  evtSource.addEventListener('error', (e) => {
+    let errMsg = 'Unknown error';
+    try { const d = JSON.parse(e.data); errMsg = d.error || errMsg; } catch {}
+    msgEl.className = 'msg error';
+    msgEl.textContent = 'Error: ' + errMsg;
+    evtSource.close();
+    input.disabled = false;
+    sendBtn.disabled = false;
+    streaming = false;
+    statusEl.textContent = '';
+  });
+}
+
+// Simple EventSource that supports POST
+class EventSourcePolyfill {
+  constructor(url, options) {
+    this._listeners = {};
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.setRequestHeader('Content-Type', options.headers['Content-Type']);
+    xhr.responseType = 'text';
+    let lastIndex = 0;
+    xhr.onprogress = () => {
+      const newData = xhr.responseText.substring(lastIndex);
+      lastIndex = xhr.responseText.length;
+      const lines = newData.split('\n');
+      let eventType = 'message';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) eventType = line.substring(7).trim();
+        else if (line.startsWith('data: ')) {
+          const data = line.substring(6);
+          if (this._listeners[eventType]) {
+            for (const cb of this._listeners[eventType]) cb({ data });
+          }
+          eventType = 'message';
+        }
+      }
+    };
+    xhr.onerror = () => {
+      if (this._listeners['error']) {
+        for (const cb of this._listeners['error']) cb({ data: '{}' });
+      }
+    };
+    xhr.onloadend = () => {
+      input.disabled = false;
+      sendBtn.disabled = false;
+      streaming = false;
+      statusEl.textContent = '';
+    };
+    xhr.send(options.body);
+    this._xhr = xhr;
+  }
+  addEventListener(type, cb) {
+    if (!this._listeners[type]) this._listeners[type] = [];
+    this._listeners[type].push(cb);
+  }
+  close() { this._xhr.abort(); }
+}
+
+async function init() {
+  try {
+    const resp = await fetch('/api/status');
+    const data = await resp.json();
+    if (!data.modelLoaded) {
+      addMsg('assistant', 'Model not loaded. Copy your .gguf file to `models/` folder and restart the server.');
+      loading.classList.remove('show');
+      return;
+    }
+    await loadSessions();
+    if (sessions.length) {
+      switchSession(sessions[0].id);
+    } else {
+      const r = await fetch('/api/sessions', { method: 'POST' });
+      const s = await r.json();
+      sessions.push(s);
+      switchSession(s.id);
+      renderSessions();
+    }
+    loading.classList.remove('show');
+  } catch {
+    loading.textContent = 'connecting...';
+    setTimeout(init, 1000);
+  }
+}
+
+init();
+</script>
+</body>
+</html>

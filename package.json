@@ -1,0 +1,25 @@
+{
+  "name": "scout",
+  "version": "1.0.0",
+  "description": "Scout — multi-engine web search with local LLM. DDG, Google, Bing, Brave, Reddit, GitHub, Wikipedia. MCP, HTTP, CLI, WebUI.",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "scout": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "mcp": "node index.js mcp",
+    "serve": "node index.js serve",
+    "test": "node test/verify-engines.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "cloakbrowser": "0.3.25",
+    "express": "^5.2.1",
+    "node-llama-cpp": "^3.19.0",
+    "playwright-core": "^1.59.1",
+    "zod": "^3.22.0"
+  }
+}
