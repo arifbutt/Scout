@@ -12,24 +12,66 @@ Multi-engine web search with local LLM inference. Queries 7 search engines in pa
 
 ## Quick start
 
+### 1. Install dependencies
 ```bash
-# Install
 npm install
+```
 
-# Download a GGUF model (e.g., Qwen2.5-0.5B-Instruct-Q4_K_M)
-# Place it in ./models/ and set path in config.json
+### 2. Download a model
 
-# Web UI (starts model + server)
+Pick one and place the `.gguf` file in `./models/`:
+
+| Model | Size | RAM | Notes |
+|-------|------|-----|-------|
+| **Qwen2.5-0.5B-Instruct-Q4_K_M** | ~398 MB | 4GB+ | Recommended. Balances speed and quality. |
+| **Qwen2.5-1.5B-Instruct-Q4_K_M** | ~900 MB | 8GB+ | Better summarization. Slower on low-end CPUs. |
+
+```bash
+# Example: download the 0.5B model from Hugging Face
+# https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF
+# Save as: ./models/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf
+```
+
+### 3. Point config.json to your model
+
+```json
+{
+  "modelPath": "./models/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+  "port": 3848,
+  "maxTokens": 500,
+  "temperature": 0.1
+}
+```
+
+### 4. Run
+
+```bash
+# Web UI (loads model + starts server)
 node index.js webui
 
 # CLI search
 node index.js "cheap mini pc daraz"
 
-# MCP server (for Claude etc.)
+# MCP server (for Claude, Cline, etc.)
 node index.js mcp
 
 # HTTP API
 node index.js serve
+```
+
+## Setup after pulling
+
+```bash
+git clone https://github.com/arifbutt/Scout.git
+cd Scout
+npm install
+
+# Download model (0.5B recommended for first run)
+# https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf
+# Place it in ./models/
+
+# Start
+node index.js webui
 ```
 
 ## Usage
